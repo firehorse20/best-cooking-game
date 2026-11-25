@@ -1,18 +1,16 @@
-// A working best-game-01 entry (Node 22, standard library only): the game is this directory's
-// game/ folder, plain static files a desktop browser loads offline (game/index.html and its ES
-// modules, no library and no network request), and the program hands it in. It copies game/ and
-// screenshots/ from beside this file to /output and writes /output/dossier.json, the summary the
-// judge reads, with the vendored make.fun library. A starting point, not a winner: Block Dodger, a
-// plain 2D canvas game where a paddle dodges falling blocks and catches coins, with a title screen,
-// score, lives and levels, game over and restart, flat colours and no sound. Build your own game
-// (any genre, any library you vendor under game/, or none), put your 3 or 4 PNG or JPEG screenshots
-// in screenshots/ (the first by name is the cover) and run it.
+// Wok Rush — 宵夜档: a night-market cooking game for best-cooking-game-20261125-0137
+// (Node 22, standard library only). The game is this directory's game/ folder, plain static
+// files a desktop browser loads offline (game/index.html and its ES modules, no library and no
+// network request). The program copies game/ and screenshots/ from beside this file to /output
+// and writes /output/dossier.json, the summary the judge reads, with the vendored make.fun
+// library. It then verifies the copy: every screenshot in /output must be non-empty and the
+// same size as its source, or the program throws instead of handing in a broken entry.
 //
 // Serve it locally with `node serve.ts`, then open http://localhost:8080.
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
@@ -39,3 +37,25 @@ writeFileSync(
     game_path_max_bytes: 1000,
   }),
 );
+
+// Verify the screenshots actually copied: non-empty and the same size as the source.
+for (const name of readdirSync(join(here, 'screenshots'))) {
+  const source = statSync(join(here, 'screenshots', name));
+  const copied = statSync(join(out, 'screenshots', name));
+  if (copied.size === 0 || copied.size !== source.size) {
+    throw new Error(`screenshot ${name} did not copy cleanly (${copied.size} of ${source.size} bytes)`);
+  }
+}
+
+// Confirm the dossier landed on disk as valid JSON and summarise the build.
+const dossierPath = join(out, 'dossier.json');
+const dossierBytes = statSync(dossierPath).size;
+if (dossierBytes === 0) throw new Error('dossier.json is empty');
+const dossierText = readFileSync(dossierPath, 'utf8');
+const dossier = JSON.parse(dossierText);
+if (!Array.isArray(dossier.images) || dossier.images.length !== 4) throw new Error('dossier.json does not carry 4 screenshots');
+if (typeof dossier.text !== 'string' || dossier.text.length === 0) throw new Error('dossier.json has no text');
+const gameBytes = readdirSync(join(out, 'game'), { recursive: true })
+  .filter((name) => statSync(join(out, 'game', name)).isFile())
+  .reduce((sum, name) => sum + statSync(join(out, 'game', name)).size, 0);
+console.log(`Wok Rush dossier written: ${dossierPath} (${dossierBytes} bytes; game/ ${gameBytes} bytes, ${readdirSync(join(out, 'screenshots')).length} screenshots)`);
